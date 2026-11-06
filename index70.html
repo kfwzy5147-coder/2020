@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>أسرة القديس الأنبا أغسطينوس - سجل الحضور والبيانات</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+    <style>
+        :root {
+            --primary: #1e293b;
+            --accent: #d97706;
+            --accent-light: #fef3c7;
+            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --border: rgba(217, 119, 6, 0.3);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Cairo', sans-serif;
+        }
+
+        body {
+            background: var(--bg-gradient);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* Lock Screen */
+        #lockScreen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #0f172a;
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        .lock-box {
+            background: rgba(30, 41, 59, 0.9);
+            padding: 40px;
+            border-radius: 20px;
+            border: 1px solid var(--accent);
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: var(--card-bg);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            backdrop-filter: blur(10px);
+        }
+
+        header h1 {
+            color: var(--accent);
+            font-size: 2rem;
+            margin-bottom: 5px;
+        }
+
+        header p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        .birthday-banner {
+            background: linear-gradient(135deg, #b45309 0%, #78350f 100%);
+            border: 2px solid #f59e0b;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 30px;
+            display: none;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+            70% { box-shadow: 0 0 0 15px rgba(245, 158, 11, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            text-align: center;
+        }
+
+        .stat-card h3 {
+            font-size: 1.8rem;
+            color: var(--accent);
+        }
+
+        .form-card {
+            background: var(--card-bg);
+            padding: 25px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            margin-bottom: 30px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 15px;
+        }
+
+        input, button {
+            width: 100%;
+            padding: 12px 15px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background: #0f172a;
+            color: #fff;
+            font-size: 1rem;
+            outline: none;
+        }
+
+        input:focus {
+            border-color: var(--accent);
+        }
+
+        button.btn-add {
+            background: var(--accent);
+            color: #fff;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            transition: 0.3s;
+        }
+
+        button.btn-add:hover {
+            background: #b45309;
+        }
+
+        .table-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: right;
+        }
+
+        th, td {
+            padding: 15px;
+            border-bottom: 1px solid #334155;
+        }
+
+        th {
+            background: #0f172a;
+            color: var(--accent);
+        }
+
+        tr.today-bday {
+            background: rgba(245, 158, 11, 0.15) !important;
+        }
+
+        .whatsapp-btn {
+            color: #22c55e;
+            text-decoration: none;
+            font-size: 1.2rem;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- شاشة الدخول -->
+    <div id="lockScreen">
+        <div class="lock-box">
+            <i class="fas fa-church fa-3x" style="color: var(--accent); margin-bottom: 15px;"></i>
+            <h2>أسرة القديس الأنبا أغسطينوس</h2>
+            <p style="color: var(--text-muted); margin-bottom: 20px;">أدخل كلمة المرور للوصول إلى السجل</p>
+            <input type="password" id="passInput" placeholder="كلمة المرور" style="margin-bottom: 15px; text-align: center;">
+            <button class="btn-add" onclick="checkPass()">دخول</button>
+        </div>
+    </div>
+
+    <!-- المحتوى الرئيسي -->
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-cross"></i> أسرة القديس الأنبا أغسطينوس</h1>
+            <p>"عَظَّمَ الرَّبُّ الْعَمَلَ مَعَنَا، وَصِرْنَا فَرِحِينَ" (مز 126: 3)</p>
+        </header>
+
+        <!-- كارت أعياد الميلاد -->
+        <div id="birthdayBanner" class="birthday-banner">
+            <h2>🎂 أعياد الميلاد اليوم! 🎉</h2>
+            <div id="birthdayList" style="margin-top: 10px;"></div>
+        </div>
+
+        <!-- الإحصائيات -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <p>إجمالي الأعضاء</p>
+                <h3 id="totalCount">0</h3>
+            </div>
+            <div class="stat-card">
+                <p>أعياد ميلاد اليوم</p>
+                <h3 id="todayBdayCount">0</h3>
+            </div>
+        </div>
+
+        <!-- نموذج الإضافة -->
+        <div class="form-card">
+            <h3 style="margin-bottom: 15px; color: var(--accent);"><i class="fas fa-user-plus"></i> إضافة عضو جديد</h3>
+            <div class="form-grid">
+                <input type="text" id="nameInput" placeholder="الاسم بالكامل">
+                <input type="text" id="phoneInput" placeholder="رقم التليفون (مثال: 010...)">
+                <input type="date" id="dobInput">
+                <button class="btn-add" onclick="addMember()">إضافة للسجل السحابي</button>
+            </div>
+        </div>
+
+        <!-- الجدول -->
+        <div class="table-card">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>الاسم</th>
+                        <th>رقم التليفون</th>
+                        <th>تاريخ الميلاد</th>
+                        <th>إجراءات</th>
+                    </tr>
+                </thead>
+                <tbody id="memberTable"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyA6v8__SSf5We2ZPhWAsGn0gxnFj-e2D4w",
+            authDomain: "augustine-db-3c293.firebaseapp.com",
+            databaseURL: "https://augustine-db-3c293-default-rtdb.firebaseio.com",
+            projectId: "augustine-db-3c293",
+            storageBucket: "augustine-db-3c293.firebasestorage.app",
+            messagingSenderId: "80073653040",
+            appId: "1:80073653040:web:ec8417b864be1091d026f5"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database().ref('augustine_members');
+
+        let members = [];
+
+        function checkPass() {
+            const pass = document.getElementById('passInput').value;
+            if (pass === '0115') {
+                document.getElementById('lockScreen').style.display = 'none';
+                listenToData();
+            } else {
+                Swal.fire('خطأ', 'كلمة المرور غير صحيحة', 'error');
+            }
+        }
+
+        function listenToData() {
+            db.on('value', (snapshot) => {
+                const data = snapshot.val();
+                members = [];
+                if (data) {
+                    Object.keys(data).forEach(key => {
+                        members.push({ id: key, ...data[key] });
+                    });
+                }
+                render();
+            });
+        }
+
+        function addMember() {
+            const name = document.getElementById('nameInput').value.trim();
+            const phone = document.getElementById('phoneInput').value.trim();
+            const dob = document.getElementById('dobInput').value;
+
+            if (!name || !phone || !dob) {
+                Swal.fire('تنبيه', 'يرجى ملء جميع الخانات', 'warning');
+                return;
+            }
+
+            db.push({ name, phone, dob });
+
+            document.getElementById('nameInput').value = '';
+            document.getElementById('phoneInput').value = '';
+            document.getElementById('dobInput').value = '';
+
+            Swal.fire('تم!', 'تمت إضافة البيانات وسحبها للسحابة بنجاح', 'success');
+        }
+
+        function deleteMember(id) {
+            Swal.fire({
+                title: 'هل أنت تأكد؟',
+                text: "سيتم حذف هذا العضو من السحابة",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'نعم، احذف',
+                cancelButtonText: 'إلغاء'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    db.child(id).remove();
+                    Swal.fire('تم الحذف!', 'تم حذف العضو.', 'success');
+                }
+            });
+        }
+
+        function render() {
+            const tbody = document.getElementById('memberTable');
+            const today = new Date();
+            const tDay = today.getDate();
+            const tMonth = today.getMonth() + 1;
+
+            tbody.innerHTML = '';
+            let todayBdays = [];
+
+            members.forEach((m, idx) => {
+                const [y, mStr, dStr] = m.dob.split('-');
+                const isToday = parseInt(dStr) === tDay && parseInt(mStr) === tMonth;
+
+                if (isToday) todayBdays.push(m);
+
+                const tr = document.createElement('tr');
+                if (isToday) tr.classList.add('today-bday');
+
+                tr.innerHTML = `
+                    <td>${idx + 1}</td>
+                    <td>${m.name} ${isToday ? '🎂' : ''}</td>
+                    <td>
+                        ${m.phone}
+                        <a href="https://wa.me/2${m.phone}" target="_blank" class="whatsapp-btn"><i class="fab fa-whatsapp"></i></a>
+                    </td>
+                    <td>${m.dob}</td>
+                    <td><button onclick="deleteMember('${m.id}')" style="background:#ef4444; border:none; padding:5px 10px; cursor:pointer; width:auto;">حذف</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('totalCount').innerText = members.length;
+            document.getElementById('todayBdayCount').innerText = todayBdays.length;
+
+            const banner = document.getElementById('birthdayBanner');
+            const list = document.getElementById('birthdayList');
+            if (todayBdays.length > 0) {
+                banner.style.display = 'block';
+                list.innerHTML = todayBdays.map(b => `<p style="font-size:1.2rem;">✨ كل سنة وأنت طيب يا <strong>${b.name}</strong> 🎂</p>`).join('');
+            } else {
+                banner.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>
