@@ -16,7 +16,8 @@
         :root {
             --primary: #1e293b;
             --accent: #d97706;
-            --accent-light: #fef3c7;
+            --accent-boys: #3b82f6;
+            --accent-girls: #ec4899;
             --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
             --card-bg: rgba(30, 41, 59, 0.75);
             --border: rgba(217, 119, 6, 0.3);
@@ -67,7 +68,7 @@
 
         header {
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 25px;
             padding: 20px;
             background: var(--card-bg);
             border-radius: 16px;
@@ -84,6 +85,45 @@
         header p {
             color: var(--text-muted);
             font-size: 0.95rem;
+        }
+
+        .tab-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            max-width: 250px;
+            padding: 14px 20px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            border-radius: 12px;
+            border: 2px solid transparent;
+            cursor: pointer;
+            background: rgba(30, 41, 59, 0.6);
+            color: var(--text-muted);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .tab-btn.active-boys {
+            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+            color: #fff;
+            border-color: #60a5fa;
+            box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
+        }
+
+        .tab-btn.active-girls {
+            background: linear-gradient(135deg, #831843 0%, #ec4899 100%);
+            color: #fff;
+            border-color: #f472b6;
+            box-shadow: 0 4px 20px rgba(236, 72, 153, 0.4);
         }
 
         .birthday-banner {
@@ -161,7 +201,16 @@
         }
 
         button.btn-add:hover {
-            background: #b45309;
+            filter: brightness(1.2);
+        }
+
+        .search-box {
+            margin-bottom: 15px;
+        }
+
+        .search-box input {
+            background: #1e293b;
+            border-color: var(--border);
         }
 
         .table-card {
@@ -169,6 +218,7 @@
             border-radius: 16px;
             border: 1px solid var(--border);
             overflow-x: auto;
+            padding: 15px;
         }
 
         table {
@@ -219,7 +269,17 @@
             <p>"عَظَّمَ الرَّبُّ الْعَمَلَ مَعَنَا، وَصِرْنَا فَرِحِينَ" (مز 126: 3)</p>
         </header>
 
-        <!-- كارت أعياد الميلاد -->
+        <!-- التبويبات -->
+        <div class="tab-buttons">
+            <button id="btnBoys" class="tab-btn active-boys" onclick="switchTab('boys')">
+                <i class="fas fa-mars"></i> سجل الأولاد
+            </button>
+            <button id="btnGirls" class="tab-btn" onclick="switchTab('girls')">
+                <i class="fas fa-venus"></i> سجل البنات
+            </button>
+        </div>
+
+        <!-- أعياد الميلاد -->
         <div id="birthdayBanner" class="birthday-banner">
             <h2>🎂 أعياد الميلاد اليوم! 🎉</h2>
             <div id="birthdayList" style="margin-top: 10px;"></div>
@@ -228,7 +288,7 @@
         <!-- الإحصائيات -->
         <div class="stats-grid">
             <div class="stat-card">
-                <p>إجمالي الأعضاء</p>
+                <p id="totalStatLabel">إجمالي الأولاد</p>
                 <h3 id="totalCount">0</h3>
             </div>
             <div class="stat-card">
@@ -238,18 +298,21 @@
         </div>
 
         <!-- نموذج الإضافة -->
-        <div class="form-card">
-            <h3 style="margin-bottom: 15px; color: var(--accent);"><i class="fas fa-user-plus"></i> إضافة عضو جديد</h3>
+        <div class="form-card" id="formCard">
+            <h3 style="margin-bottom: 15px; color: var(--accent);" id="formTitle"><i class="fas fa-user-plus"></i> إضافة عضو جديد (سجل الأولاد)</h3>
             <div class="form-grid">
                 <input type="text" id="nameInput" placeholder="الاسم بالكامل">
                 <input type="text" id="phoneInput" placeholder="رقم التليفون (مثال: 010...)">
                 <input type="date" id="dobInput">
-                <button class="btn-add" onclick="addMember()">إضافة للسجل</button>
+                <button class="btn-add" id="submitBtn" onclick="addMember()">إضافة لسجل الأولاد</button>
             </div>
         </div>
 
-        <!-- الجدول -->
+        <!-- شريط البحث + الجدول -->
         <div class="table-card">
+            <div class="search-box">
+                <input type="text" id="searchInput" oninput="render()" placeholder="🔍 ابحث بالاسم أو رقم التليفون...">
+            </div>
             <table>
                 <thead>
                     <tr>
@@ -279,28 +342,64 @@
         let db = null;
         try {
             firebase.initializeApp(firebaseConfig);
-            db = firebase.database().ref('augustine_members');
+            db = firebase.database();
         } catch(e) {
-            console.log("Firebase Init Error", e);
+            console.log("Firebase Error", e);
         }
 
-        // جلب البيانات المحلية أولاً
-        let members = JSON.parse(localStorage.getItem('augustine_members')) || [];
+        let currentTab = 'boys';
+        let membersData = {
+            boys: JSON.parse(localStorage.getItem('augustine_boys')) || [],
+            girls: JSON.parse(localStorage.getItem('augustine_girls')) || []
+        };
 
         function checkPass() {
             const pass = document.getElementById('passInput').value;
             if (pass === '0115') {
                 document.getElementById('lockScreen').style.display = 'none';
                 render();
-                syncWithCloud();
+                syncWithCloud('boys');
+                syncWithCloud('girls');
             } else {
                 Swal.fire('خطأ', 'كلمة المرور غير صحيحة', 'error');
             }
         }
 
-        function syncWithCloud() {
+        function switchTab(tab) {
+            currentTab = tab;
+            const btnBoys = document.getElementById('btnBoys');
+            const btnGirls = document.getElementById('btnGirls');
+            const formCard = document.getElementById('formCard');
+            const formTitle = document.getElementById('formTitle');
+            const submitBtn = document.getElementById('submitBtn');
+            const totalLabel = document.getElementById('totalStatLabel');
+
+            if (tab === 'boys') {
+                btnBoys.className = 'tab-btn active-boys';
+                btnGirls.className = 'tab-btn';
+                formCard.style.borderColor = 'rgba(59, 130, 246, 0.4)';
+                formTitle.innerHTML = '<i class="fas fa-mars" style="color:#3b82f6;"></i> إضافة عضو جديد (سجل الأولاد)';
+                formTitle.style.color = '#60a5fa';
+                submitBtn.style.background = 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)';
+                submitBtn.innerText = 'إضافة لسجل الأولاد';
+                totalLabel.innerText = 'إجمالي الأولاد';
+            } else {
+                btnBoys.className = 'tab-btn';
+                btnGirls.className = 'tab-btn active-girls';
+                formCard.style.borderColor = 'rgba(236, 72, 153, 0.4)';
+                formTitle.innerHTML = '<i class="fas fa-venus" style="color:#ec4899;"></i> إضافة عضوة جديدة (سجل البنات)';
+                formTitle.style.color = '#f472b6';
+                submitBtn.style.background = 'linear-gradient(135deg, #831843 0%, #ec4899 100%)';
+                submitBtn.innerText = 'إضافة لسجل البنات';
+                totalLabel.innerText = 'إجمالي البنات';
+            }
+
+            render();
+        }
+
+        function syncWithCloud(tab) {
             if (!db) return;
-            db.on('value', (snapshot) => {
+            db.ref('augustine_' + tab).on('value', (snapshot) => {
                 const data = snapshot.val();
                 if (data) {
                     let cloudMembers = [];
@@ -308,9 +407,9 @@
                         cloudMembers.push({ id: key, ...data[key] });
                     });
                     if (cloudMembers.length > 0) {
-                        members = cloudMembers;
-                        localStorage.setItem('augustine_members', JSON.stringify(members));
-                        render();
+                        membersData[tab] = cloudMembers;
+                        localStorage.setItem('augustine_' + tab, JSON.stringify(membersData[tab]));
+                        if (currentTab === tab) render();
                     }
                 }
             });
@@ -328,24 +427,21 @@
 
             const newMember = { id: 'm_' + Date.now(), name, phone, dob };
 
-            // 1. إضافة مباشرة وسريعة في المتصفح والجدول
-            members.push(newMember);
-            localStorage.setItem('augustine_members', JSON.stringify(members));
+            membersData[currentTab].push(newMember);
+            localStorage.setItem('augustine_' + currentTab, JSON.stringify(membersData[currentTab]));
             render();
 
-            // 2. إرسال للسحابة في الخلفية
             if (db) {
-                db.child(newMember.id).set({ name, phone, dob }).catch(err => console.log("Cloud sync error:", err));
+                db.ref('augustine_' + currentTab).child(newMember.id).set({ name, phone, dob }).catch(err => console.log(err));
             }
 
-            // مسح المدخلات
             document.getElementById('nameInput').value = '';
             document.getElementById('phoneInput').value = '';
             document.getElementById('dobInput').value = '';
 
             Swal.fire({
                 icon: 'success',
-                title: 'تمت الإضافة بنجاح!',
+                title: currentTab === 'boys' ? 'تمت الإضافة لسجل الأولاد!' : 'تمت الإضافة لسجل البنات!',
                 timer: 1500,
                 showConfirmButton: false
             });
@@ -363,28 +459,36 @@
                 cancelButtonText: 'إلغاء'
             }).then((result) => {
                 if (result.isConfirmed) {
-                    members = members.filter(m => m.id !== id);
-                    localStorage.setItem('augustine_members', JSON.stringify(members));
+                    membersData[currentTab] = membersData[currentTab].filter(m => m.id !== id);
+                    localStorage.setItem('augustine_' + currentTab, JSON.stringify(membersData[currentTab]));
                     render();
 
                     if (db) {
-                        db.child(id).remove().catch(err => console.log(err));
+                        db.ref('augustine_' + currentTab).child(id).remove().catch(err => console.log(err));
                     }
-                    Swal.fire('تم الحذف!', 'تم حذف العضو.', 'success');
+                    Swal.fire('تم الحذف!', 'تم الحذف من السجل.', 'success');
                 }
             });
         }
 
         function render() {
             const tbody = document.getElementById('memberTable');
+            const searchVal = document.getElementById('searchInput').value.trim().toLowerCase();
             const today = new Date();
             const tDay = today.getDate();
             const tMonth = today.getMonth() + 1;
 
             tbody.innerHTML = '';
             let todayBdays = [];
+            const activeList = membersData[currentTab];
 
-            members.forEach((m, idx) => {
+            // فلترة بالبحث
+            const filteredList = activeList.filter(m => 
+                (m.name && m.name.toLowerCase().includes(searchVal)) || 
+                (m.phone && m.phone.includes(searchVal))
+            );
+
+            filteredList.forEach((m, idx) => {
                 let isToday = false;
                 if (m.dob) {
                     const parts = m.dob.split('-');
@@ -411,14 +515,14 @@
                 tbody.appendChild(tr);
             });
 
-            document.getElementById('totalCount').innerText = members.length;
+            document.getElementById('totalCount').innerText = activeList.length;
             document.getElementById('todayBdayCount').innerText = todayBdays.length;
 
             const banner = document.getElementById('birthdayBanner');
             const list = document.getElementById('birthdayList');
             if (todayBdays.length > 0) {
                 banner.style.display = 'block';
-                list.innerHTML = todayBdays.map(b => `<p style="font-size:1.2rem;">✨ كل سنة وأنت طيب يا <strong>${b.name}</strong> 🎂</p>`).join('');
+                list.innerHTML = todayBdays.map(b => `<p style="font-size:1.2rem;">✨ كل سنة وأنت طيب${currentTab === 'girls' ? 'ة' : ''} يا <strong>${b.name}</strong> 🎂</p>`).join('');
             } else {
                 banner.style.display = 'none';
             }
