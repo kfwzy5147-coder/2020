@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسرة القديس الأنبا أغسطينوس - سجل الحضور والبيانات</title>
+    <title>أسرة القديس الأنبا أغسطينوس - سجل البيانات</title>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -18,7 +18,7 @@
             --accent: #d97706;
             --accent-light: #fef3c7;
             --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            --card-bg: rgba(30, 41, 59, 0.7);
+            --card-bg: rgba(30, 41, 59, 0.75);
             --border: rgba(217, 119, 6, 0.3);
             --text-main: #f8fafc;
             --text-muted: #94a3b8;
@@ -50,7 +50,7 @@
             flex-direction: column;
         }
         .lock-box {
-            background: rgba(30, 41, 59, 0.9);
+            background: rgba(30, 41, 59, 0.95);
             padding: 40px;
             border-radius: 20px;
             border: 1px solid var(--accent);
@@ -168,7 +168,7 @@
             background: var(--card-bg);
             border-radius: 16px;
             border: 1px solid var(--border);
-            overflow: hidden;
+            overflow-x: auto;
         }
 
         table {
@@ -188,7 +188,7 @@
         }
 
         tr.today-bday {
-            background: rgba(245, 158, 11, 0.15) !important;
+            background: rgba(245, 158, 11, 0.2) !important;
         }
 
         .whatsapp-btn {
@@ -244,7 +244,7 @@
                 <input type="text" id="nameInput" placeholder="الاسم بالكامل">
                 <input type="text" id="phoneInput" placeholder="رقم التليفون (مثال: 010...)">
                 <input type="date" id="dobInput">
-                <button class="btn-add" onclick="addMember()">إضافة للسجل السحابي</button>
+                <button class="btn-add" onclick="addMember()">إضافة للسجل</button>
             </div>
         </div>
 
@@ -276,31 +276,43 @@
             appId: "1:80073653040:web:ec8417b864be1091d026f5"
         };
 
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.database().ref('augustine_members');
+        let db = null;
+        try {
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.database().ref('augustine_members');
+        } catch(e) {
+            console.log("Firebase Init Error", e);
+        }
 
-        let members = [];
+        // جلب البيانات المحلية أولاً
+        let members = JSON.parse(localStorage.getItem('augustine_members')) || [];
 
         function checkPass() {
             const pass = document.getElementById('passInput').value;
             if (pass === '0115') {
                 document.getElementById('lockScreen').style.display = 'none';
-                listenToData();
+                render();
+                syncWithCloud();
             } else {
                 Swal.fire('خطأ', 'كلمة المرور غير صحيحة', 'error');
             }
         }
 
-        function listenToData() {
+        function syncWithCloud() {
+            if (!db) return;
             db.on('value', (snapshot) => {
                 const data = snapshot.val();
-                members = [];
                 if (data) {
+                    let cloudMembers = [];
                     Object.keys(data).forEach(key => {
-                        members.push({ id: key, ...data[key] });
+                        cloudMembers.push({ id: key, ...data[key] });
                     });
+                    if (cloudMembers.length > 0) {
+                        members = cloudMembers;
+                        localStorage.setItem('augustine_members', JSON.stringify(members));
+                        render();
+                    }
                 }
-                render();
             });
         }
 
@@ -314,19 +326,35 @@
                 return;
             }
 
-            db.push({ name, phone, dob });
+            const newMember = { id: 'm_' + Date.now(), name, phone, dob };
 
+            // 1. إضافة مباشرة وسريعة في المتصفح والجدول
+            members.push(newMember);
+            localStorage.setItem('augustine_members', JSON.stringify(members));
+            render();
+
+            // 2. إرسال للسحابة في الخلفية
+            if (db) {
+                db.child(newMember.id).set({ name, phone, dob }).catch(err => console.log("Cloud sync error:", err));
+            }
+
+            // مسح المدخلات
             document.getElementById('nameInput').value = '';
             document.getElementById('phoneInput').value = '';
             document.getElementById('dobInput').value = '';
 
-            Swal.fire('تم!', 'تمت إضافة البيانات وسحبها للسحابة بنجاح', 'success');
+            Swal.fire({
+                icon: 'success',
+                title: 'تمت الإضافة بنجاح!',
+                timer: 1500,
+                showConfirmButton: false
+            });
         }
 
         function deleteMember(id) {
             Swal.fire({
                 title: 'هل أنت تأكد؟',
-                text: "سيتم حذف هذا العضو من السحابة",
+                text: "سيتم حذف هذا العضو من السجل",
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#d33',
@@ -335,7 +363,13 @@
                 cancelButtonText: 'إلغاء'
             }).then((result) => {
                 if (result.isConfirmed) {
-                    db.child(id).remove();
+                    members = members.filter(m => m.id !== id);
+                    localStorage.setItem('augustine_members', JSON.stringify(members));
+                    render();
+
+                    if (db) {
+                        db.child(id).remove().catch(err => console.log(err));
+                    }
                     Swal.fire('تم الحذف!', 'تم حذف العضو.', 'success');
                 }
             });
@@ -351,8 +385,13 @@
             let todayBdays = [];
 
             members.forEach((m, idx) => {
-                const [y, mStr, dStr] = m.dob.split('-');
-                const isToday = parseInt(dStr) === tDay && parseInt(mStr) === tMonth;
+                let isToday = false;
+                if (m.dob) {
+                    const parts = m.dob.split('-');
+                    if (parts.length === 3) {
+                        isToday = parseInt(parts[2]) === tDay && parseInt(parts[1]) === tMonth;
+                    }
+                }
 
                 if (isToday) todayBdays.push(m);
 
@@ -361,13 +400,13 @@
 
                 tr.innerHTML = `
                     <td>${idx + 1}</td>
-                    <td>${m.name} ${isToday ? '🎂' : ''}</td>
+                    <td><strong>${m.name}</strong> ${isToday ? '🎂' : ''}</td>
                     <td>
                         ${m.phone}
                         <a href="https://wa.me/2${m.phone}" target="_blank" class="whatsapp-btn"><i class="fab fa-whatsapp"></i></a>
                     </td>
                     <td>${m.dob}</td>
-                    <td><button onclick="deleteMember('${m.id}')" style="background:#ef4444; border:none; padding:5px 10px; cursor:pointer; width:auto;">حذف</button></td>
+                    <td><button onclick="deleteMember('${m.id}')" style="background:#ef4444; border:none; padding:5px 12px; color:#fff; border-radius:6px; cursor:pointer;">حذف</button></td>
                 `;
                 tbody.appendChild(tr);
             });
